@@ -34,10 +34,13 @@ import scala.concurrent._
 
 object Fibonacci {
 
-  implicit val ec: ExecutionContext = ExecutionContext.fromExecutor(Executors.newFixedThreadPool(Runtime.getRuntime.availableProcessors * 2))
+  val pool = Executors.newFixedThreadPool(Runtime.getRuntime.availableProcessors * 2)
+  implicit val ec: ExecutionContext = ExecutionContext.fromExecutor(pool)
 
   def main(args: Array[String]): Unit = {
-    fib(args(0).toInt).map(result => println("result = " + result))
+    fib(args(0).toInt)
+      .map(result => println("result = " + result))
+      .map(_ => pool.shutdown())
   }
 
   def fib(n: Int): Future[Int] = {
