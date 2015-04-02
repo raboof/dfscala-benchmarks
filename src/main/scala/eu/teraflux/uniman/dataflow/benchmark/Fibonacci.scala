@@ -29,24 +29,25 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 package eu.teraflux.uniman.dataflow.benchmark
 
-import eu.teraflux.uniman.dataflow._
-import eu.teraflux.uniman.dataflow.Dataflow._
+import java.util.concurrent.Executors
+import scala.concurrent._
 
-object Fibonacci extends DFApp{
-  def DFMain(args:Array[String]) = {
-    thread(fib _, args(0).toInt, new Token((x: Int) => { println("result = " + x) }))
+object Fibonacci {
+
+  implicit val ec: ExecutionContext = ExecutionContext.fromExecutor(Executors.newFixedThreadPool(Runtime.getRuntime.availableProcessors * 2))
+
+  def main(args: Array[String]): Unit = {
+    fib(args(0).toInt).map(result => println("result = " + result))
   }
 
-  def fib(n: Int, out: Token[Int]) {
+  def fib(n: Int): Future[Int] = {
     if(n <= 2)
-      out(1)
+      Future.successful(1)
     else {
-      var adder = thread((x: Int, y: Int, out: Token[Int]) => out(x + y))
+      val thread1 = fib(n-1)
+      val thread2 = fib(n-2)
 
-      thread(fib _, n - 1, adder.token1)
-      thread(fib _, n - 2, adder.token2)
-
-      adder(Blank, Blank, out)
+      Future.reduce(Seq(thread1, thread2))((x, y) => x + y)
     }
   }
 }

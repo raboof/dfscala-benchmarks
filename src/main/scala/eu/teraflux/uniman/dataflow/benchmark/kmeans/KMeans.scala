@@ -31,14 +31,15 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 package eu.teraflux.uniman.dataflow.benchmark.kmeans
 
-import eu.teraflux.uniman.dataflow._
+import java.util.concurrent.Executors
+import scala.concurrent._
 import scala.collection.mutable.ListBuffer
 import java.io.BufferedReader
 import java.io.FileReader
 import scala.util.Random
 import eu.teraflux.uniman.dataflow.benchmark.Timer
 
-object KMeans extends DFApp{
+object KMeans {
   private var noThreads:Int = 1
   private var noClusters:Int = 16
   private var filename:String = null
@@ -46,14 +47,13 @@ object KMeans extends DFApp{
   
   var points:Array[Point] = null
    
-
-  def DFMain(args:Array[String]) {
+  def main(args:Array[String]) {
     getArgs(args)
     points = setPoints()
-    DFManager.setThreadNumber(noThreads)
+    val ec: ExecutionContext = ExecutionContext.fromExecutor(Executors.newFixedThreadPool(noThreads))
     println("\nThreads: " + noThreads)
     val clusters:Array[List[Double]] = setClusters(points, noClusters)
-    val k = new KMeansInstance(points, clusters)
+    val k = new KMeansInstance(points, clusters, ec)
     k.computePoints()
   }
 
@@ -147,7 +147,8 @@ object KMeans extends DFApp{
     }
   }
 
-  private class KMeansInstance(points:Array[Point], clusters:Array[List[Double]]) {
+  private class KMeansInstance(points:Array[Point], clusters:Array[List[Double]], ec: ExecutionContext) {
+    implicit val executionContext: ExecutionContext = ec
     var iterations:Int = 0
     val noDimensions:Int = clusters(0).length
     val noPoints:Int = points.length
@@ -161,29 +162,23 @@ object KMeans extends DFApp{
       var start = 0
       var end = pointsPerThread
     //  var n = 0
-      
-      val collector = DFManager.createCollectorThread[(Array[List[Double]], Array[Int])](noThreads)
-      val reduction = DFManager.createThread(computeClusters _)
-      collector.addListener(reduction.token1)
+
+      val futures = ListBuffer[Future[(Array[List[Double]], Array[Int])]]()
 
       while (end < noPoints) {
-        val thread = DFManager.createThread(computePointsSection _)
-        thread.arg1  = start
-        thread.arg2 = end
-       // DFManager.passToken(thread, n, 3)
-        thread.arg3 = collector.token1
+        val thread = computePointsSection(start, end)
+        futures += thread
 
         start = end
         end += pointsPerThread
         //n += 1
       }
 
-      val thread = DFManager.createThread(computePointsSection _)
-      thread.arg1 = start
-      thread.arg2 = noPoints
-      //DFManager.passToken(thread, n, 3)
-      thread.arg3 = collector.token1
+      val thread = computePointsSection(start, noPoints)
+      futures += thread
 
+      val collector: Future[List[(Array[List[Double]], Array[Int])]] = Future.sequence(futures.toList)
+      val reduction: Future[Unit] = collector.map(computeClusters _)
       //println("endCP")
     }
 
@@ -206,25 +201,27 @@ object KMeans extends DFApp{
       (left zip right).map(t => f(t._1, t._2))
     }
 
-    def computePointsSection(start:Int, end:Int, collector:Token[(Array[List[Double]], Array[Int])]) {
-      //println("Start Compute points " + start + ", " + end)
-      val PC = new Array[List[Double]](noClusters)
-      val PCC = new Array[Int](noClusters)
+    def computePointsSection(start:Int, end:Int): Future[(Array[List[Double]], Array[Int])] = {
+      Future {
+        //println("Start Compute points " + start + ", " + end)
+        val PC = new Array[List[Double]](noClusters)
+        val PCC = new Array[Int](noClusters)
 
-      val l = new ListBuffer[Double]()
-      for(i<- 1 to noDimensions)
-        l += 0
-      val zero:List[Double] = l.toList
-      for(j<-0 until noClusters)
-        PC(j) = zero
+        val l = new ListBuffer[Double]()
+        for (i <- 1 to noDimensions)
+          l += 0
+        val zero: List[Double] = l.toList
+        for (j <- 0 until noClusters)
+          PC(j) = zero
 
-      for (i<- start until end) {
-        val cluster:Int = points(i).calculateCluster(clusters)
-        PC(cluster) = map2(PC(cluster), points(i).location)((x,y) => x + y)
-        PCC(cluster) += 1
+        for (i <- start until end) {
+          val cluster: Int = points(i).calculateCluster(clusters)
+          PC(cluster) = map2(PC(cluster), points(i).location)((x, y) => x + y)
+          PCC(cluster) += 1
+        }
+
+        (PC, PCC)
       }
-
-      collector((PC, PCC))
       //println("End Compute points " + start + ", " + end)
     }
 

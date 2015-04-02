@@ -29,7 +29,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 package eu.teraflux.uniman.dataflow.benchmark
 
-import eu.teraflux.uniman.dataflow._
+import scala.concurrent._
 
 class BlockMatrix() {
 
@@ -88,7 +88,7 @@ class BlockMatrix() {
     }
   }//createBlockMatrix
   
-  def printResult() :Unit = {
+  def printResult()(implicit ec: ExecutionContext) :Unit = {
     var blockMatrixRowSize = this.blockMatrix.length
     var blockMatrixColSize = this.blockMatrix(0).length
     var blockRowSize = this.blockMatrix(0)(0).getRowSize()
@@ -122,7 +122,7 @@ class BlockMatrix() {
       }
       blockC = 0
     }
-    var t1 = DFManager.createThread(resultMatrix.printMatrix _)
+    var t1 = Future { resultMatrix.printMatrix() }
   }//printResult()
   
   def createResultMatrix(row :Int , col :Int, extraR :Int, extraC :Int){

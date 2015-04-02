@@ -29,17 +29,18 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 package eu.teraflux.uniman.dataflow.benchmark
 
-import eu.teraflux.uniman.dataflow._
+import java.util.concurrent.Executors
+import scala.concurrent._
 
-object BlockMatrixMain extends DFApp{
+object BlockMatrixMain {
   
   val total_runs = 10
   var runs = total_runs
   var size = 256
   val increment = 256
   val max_size = 2048
-  def DFMain(args: Array[String]){
-    
+
+  def main(args: Array[String]){
     //Matrix(y,x) 
 
 
@@ -53,12 +54,12 @@ object BlockMatrixMain extends DFApp{
     //parallel block matrix multiplication 
 
     val threads = Integer.parseInt(args(0))
-    DFManager.setThreadNumber(threads)
+    implicit val ec = ExecutionContext.fromExecutor(Executors.newFixedThreadPool(threads))
     println("Threads " + threads)
     allocateMatrices()
   }
   
-  def allocateMatrices()
+  def allocateMatrices()(implicit ec: ExecutionContext)
   {
     if(size <= max_size)
     {
@@ -70,7 +71,7 @@ object BlockMatrixMain extends DFApp{
     }
   }
   
-  def testMatrix(matrixA :Matrix,matrixB :Matrix)
+  def testMatrix(matrixA :Matrix,matrixB :Matrix)(implicit ec: ExecutionContext)
   {
     matrixA.fillMatrix()
     matrixB.fillMatrix()
@@ -78,12 +79,10 @@ object BlockMatrixMain extends DFApp{
     matrixA.blockMatrixMultiply(matrixB)
   }
   
-  def printTime(matrixA :Matrix,matrixB :Matrix) {
+  def printTime(matrixA :Matrix,matrixB :Matrix)(implicit ec: ExecutionContext) {
     print(Timer.stop() + ", ")
     if(runs > 0) {
-      val t = DFManager.createThread(testMatrix _)
-      t.arg1 = matrixA
-      t.arg2 = matrixB
+      val t = Future { testMatrix(matrixA, matrixB) }
     }
     else {
       runs = total_runs

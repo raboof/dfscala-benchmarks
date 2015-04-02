@@ -29,6 +29,9 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 package eu.teraflux.uniman.dataflow.benchmark
 
+import scala.concurrent._
+import scala.collection.mutable.ListBuffer
+
 import eu.teraflux.uniman.dataflow._
 import scala.util.Random
 import java.util.Calendar
@@ -68,7 +71,7 @@ class Matrix(sizeX :Int , sizeY :Int) {
     return result
   }
    
-  def blockMatrixMultiply(other :Matrix) :Unit = {
+  def blockMatrixMultiply(other :Matrix)(implicit ec: ExecutionContext) :Unit = {
     var blockMatrixA : BlockMatrix = new BlockMatrix()
     blockMatrixA.createBlockMatrix(this, resultBlockSize,blockColSizeA)
     var blockMatrixB : BlockMatrix = new BlockMatrix()
@@ -76,22 +79,15 @@ class Matrix(sizeX :Int , sizeY :Int) {
     var blockResult : BlockMatrix = new BlockMatrix()
     blockResult.createResultMatrix(blockMatrixA.getRowSize() , blockMatrixB.getColumnSize(), blockMatrixA.getExtraRow(), blockMatrixB.getExtraCol())
     Timer.start()
-    var d1 :DFBarrier = new DFBarrier
+    val futures = ListBuffer[Future[Unit]]()
     for(r<-0 until blockResult.getRowSize()){
       for(c<-0 until blockResult.getColumnSize()){
-        var t1 = DFManager.createThread(calculateBlockResult _, DFBarrier.NoBarrier, d1)
-        t1.arg1 = r 
-        t1.arg2 = c
-        t1.arg3 = blockMatrixA
-        t1.arg4 = blockMatrixB
-        t1.arg5 = blockResult
+        futures += Future { calculateBlockResult(r, c, blockMatrixA, blockMatrixB, blockResult) }
       }
     }
-    d1.makeReady()
+
+    Future.sequence(futures).map(_ => BlockMatrixMain.printTime(this, other))
     //print("Block Multiply Result ")
-    var t2 = DFManager.createThread(BlockMatrixMain.printTime _, d1, DFBarrier.NoBarrier)
-    t2.arg1 = this
-    t2.arg2 = other
   }
   
 
