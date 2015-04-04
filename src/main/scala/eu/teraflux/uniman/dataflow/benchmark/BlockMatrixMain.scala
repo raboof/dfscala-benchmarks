@@ -29,7 +29,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 package eu.teraflux.uniman.dataflow.benchmark
 
-import java.util.concurrent.Executors
+import java.util.concurrent.{ ExecutorService, Executors }
 import scala.concurrent._
 
 object BlockMatrixMain {
@@ -39,6 +39,7 @@ object BlockMatrixMain {
   var size = 256
   val increment = 256
   val max_size = 2048
+  var executor: ExecutorService = null
 
   def main(args: Array[String]){
     //Matrix(y,x) 
@@ -54,7 +55,8 @@ object BlockMatrixMain {
     //parallel block matrix multiplication 
 
     val threads = Integer.parseInt(args(0))
-    implicit val ec = ExecutionContext.fromExecutor(Executors.newFixedThreadPool(threads))
+    executor = Executors.newFixedThreadPool(threads)
+    implicit val ec = ExecutionContext.fromExecutor(executor)
     println("Threads " + threads)
     allocateMatrices()
   }
@@ -68,6 +70,10 @@ object BlockMatrixMain {
     var matrixA :Matrix = new Matrix(size,size); 
     var matrixB :Matrix = new Matrix(size,size); 
     testMatrix(matrixA, matrixB)
+    }
+    else
+    {
+    executor.shutdown()
     }
   }
   
