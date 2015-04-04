@@ -50,11 +50,13 @@ object KMeans {
   def main(args:Array[String]) {
     getArgs(args)
     points = setPoints()
-    val ec: ExecutionContext = ExecutionContext.fromExecutor(Executors.newFixedThreadPool(noThreads))
+    val executor = Executors.newFixedThreadPool(noThreads)
+    implicit val ec: ExecutionContext = ExecutionContext.fromExecutor(executor)
     println("\nThreads: " + noThreads)
     val clusters:Array[List[Double]] = setClusters(points, noClusters)
     val k = new KMeansInstance(points, clusters, ec)
     k.computePoints()
+     .map(_ => executor.shutdown())
   }
 
   def getArgs (args:Array[String]) = {
@@ -155,7 +157,7 @@ object KMeans {
     val noClusters:Int = clusters.length
     val pointsPerThread:Int = 1 + (noPoints-1)/noThreads
     
-    def computePoints() {
+    def computePoints(): Future[Unit] = {
       Timer.start()
       //println("StartCP")
       iterations += 1;
@@ -178,11 +180,12 @@ object KMeans {
       futures += thread
 
       val collector: Future[List[(Array[List[Double]], Array[Int])]] = Future.sequence(futures.toList)
-      val reduction: Future[Unit] = collector.map(computeClusters _)
+      val reduction: Future[Unit] = collector.flatMap(computeClusters)
       //println("endCP")
+      reduction
     }
 
-    def computeClusters(input:List[(Array[List[Double]], Array[Int])])
+    def computeClusters(input:List[(Array[List[Double]], Array[Int])]): Future[Unit] =
     {
      //println("Start Compute Clusters: " + updated) 
      if(updated) {
@@ -194,6 +197,7 @@ object KMeans {
       else 
       {
         println(Timer.stop())
+        Future.successful(())
       }
     }
 
