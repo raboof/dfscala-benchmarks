@@ -47,10 +47,12 @@ object Fibonacci {
     if(n <= 2)
       Future.successful(1)
     else {
+      def add(x: Int, y: Int): Int = x + y
+
       val thread1 = fib(n-1)
       val thread2 = fib(n-2)
 
-      Future.reduce(Seq(thread1, thread2))((x, y) => x + y)
+      Future.reduce(Seq(thread1, thread2))(add)
     }
   }
 }
