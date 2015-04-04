@@ -32,6 +32,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 package eu.teraflux.uniman.dataflow.benchmark.kmeans
 
 import java.util.concurrent.Executors
+import java.util.concurrent.ExecutorService
 import scala.concurrent._
 import scala.collection.mutable.ListBuffer
 import java.io.BufferedReader
@@ -46,17 +47,17 @@ object KMeans {
   var updated:Boolean = true
   
   var points:Array[Point] = null
+  var executor: ExecutorService = null
    
   def main(args:Array[String]) {
     getArgs(args)
     points = setPoints()
-    val executor = Executors.newFixedThreadPool(noThreads)
+    executor = Executors.newFixedThreadPool(noThreads)
     implicit val ec: ExecutionContext = ExecutionContext.fromExecutor(executor)
     println("\nThreads: " + noThreads)
     val clusters:Array[List[Double]] = setClusters(points, noClusters)
     val k = new KMeansInstance(points, clusters, ec)
     k.computePoints()
-     .map(_ => executor.shutdown())
   }
 
   def getArgs (args:Array[String]) = {
@@ -157,7 +158,7 @@ object KMeans {
     val noClusters:Int = clusters.length
     val pointsPerThread:Int = 1 + (noPoints-1)/noThreads
     
-    def computePoints(): Future[Unit] = {
+    def computePoints() {
       Timer.start()
       //println("StartCP")
       iterations += 1;
@@ -180,12 +181,11 @@ object KMeans {
       futures += thread
 
       val collector: Future[List[(Array[List[Double]], Array[Int])]] = Future.sequence(futures.toList)
-      val reduction: Future[Unit] = collector.flatMap(computeClusters)
+      val reduction: Future[Unit] = collector.map(computeClusters)
       //println("endCP")
-      reduction
     }
 
-    def computeClusters(input:List[(Array[List[Double]], Array[Int])]): Future[Unit] =
+    def computeClusters(input:List[(Array[List[Double]], Array[Int])]) =
     {
      //println("Start Compute Clusters: " + updated) 
      if(updated) {
@@ -197,7 +197,7 @@ object KMeans {
       else 
       {
         println(Timer.stop())
-        Future.successful(())
+        executor.shutdown()
       }
     }
 
